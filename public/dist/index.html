@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Netflix</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body onLoad="init()">
+  <div class="container">
+    <div class="title"><span data-sr="enter top over 2s and move 30px">How <span style="color: red;">Netflix</span> knows me better than I know myself? </span></div>
+    <div class="panel">
+      <div id="control-panel" data-sr="enter left over 8s">
+        <div class="param">
+          <label for="param-perplexity">Perplexity</label>
+          <input id="param-perplexity" type="range" min="5" max="50" value="15", step="1">
+          <output for="param-perplexity" id="param-perplexity-value">15</output>
+        </div>
+        <div class="param">
+          <label for="param-earlyexag">Early Exaggeration</label>
+          <input id="param-earlyexag" type="range" min="1.1" max="10.0" value="2.1", step="0.1">
+          <output for="param-earlyexag" id="param-earlyexag-value">2.1</output>
+        </div>
+        <div class="param">
+          <label for="param-learningrate">Learning Rate</label>
+          <input id="param-learningrate" type="range" min="1" max="1000" value="180", step="1">
+          <output for="param-learningrate" id="param-learningrate-value">180</output>
+        </div>
+        <div class="param">
+          <label for="param-maxiter">Max Iterations</label>
+          <input id="param-maxiter" type="range" min="100" max="500" value="150", step="10">
+          <output for="param-maxiter" id="param-maxiter-value">150</output>
+        </div>
+        <div id="run-button">Run</div>
+        <div id="progress">
+          <div class="param">
+            <label class="font-size-14" for="param-nsamples">display</label>
+            <select id="param-nsamples" name="param-nsamples">
+              <option value="100">only spot</option>
+              <option value="200">only text</option>
+              <option value="300" selected>all</option>
+            </select>
+            <output class="font-size-14" for="param-nsamples" id="param-nsamples-value"></output>
+          </div>
+          <div class="font-size-14"><span id="progress-status">Click Run button to begin</span></div>
+          <div class="font-size-14">Iteration: <span id="progress-iter"></span></div>
+          <div class=" font-size-14">Error: <span id="progress-error"></span></div>
+          <div class="font-size-14">Gradient vector norm: <span id="progress-gradnorm"></span></div>
+        </div>
+        <div class="selected-content" id="selected-content">
+          <div class="s-c" id="s-c">
+            <div class="title1">Selected</div>
+            <!-- <div class="selected-movie"> selectedMovie ee</div> -->
+          </div>
+          <div class="title1 title-m">Recommend</div>
+          <div class="recommand-movie" id="recommand-movie">
+          </div>
+        </div>
+      </div>
+      <div id="embedding-space" data-sr="fade in over 5s"></div>
+    </div>
+  </div>
+</div>
+
+  <!----------- SCRIPTS ------------>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-alpha1/jquery.min.js"></script>
+  <script src="./tsne.min.js"></script>
+  <script>
+    'use strict';
+    
+    var worker;
+    var N_SAMPLES;
+    var SAMPLE_DATA;
+    let sampleLabels;
+    let sampleData;
+    let samples;
+    async function init () {
+      worker = new Worker('worker.js');
+      worker.onmessage = function (e) {
+        var msg = e.data;
+        switch (msg.type) {
+          case 'PROGRESS_STATUS':
+            $('#progress-status').text(msg.data);
+            break;
+          case 'PROGRESS_ITER':
+            $('#progress-iter').text(msg.data[0] + 1);
+            $('#progress-error').text(msg.data[1].toPrecision(7));
+            $('#progress-gradnorm').text(msg.data[2].toPrecision(5));
+            break;
+          case 'PROGRESS_DATA':
+            drawUpdate(msg.data);
+            break;
+          case 'STATUS':
+            if (msg.data === 'READY') {
+              $('#run-button').bind('click', run);
+            } else {
+              $('#run-button').unbind('click', run);
+            }
+            break;
+          case 'DONE':
+            drawUpdate(msg.data);
+            break;
+          default:
+        }
+      }
+      readTextFile( './real300.txt' )
+        .then( function ( t ) {
+          sampleData = JSON.parse(t);
+          sampleLabels = ["Lilo and Stitch","Something's Gotta Give","Duplex (Widescreen)","The Game","Sweet November","Reservoir Dogs","X2: X-Men United","Taking Lives","The Deer Hunter","Chappelle's Show: Season 1","North by Northwest","Stuart Little 2","Charlotte's Web","Parenthood","Sex and the City: Season 4","Taxi","Harold and Kumar Go to White Castle","Ace Ventura: When Nature Calls","Bridget Jones's Diary","Ed Wood","High Fidelity","Pay It Forward","Dogma","Wild Things","Chasing Amy","The Pacifier","Life or Something Like It","House of Sand and Fog","The Phantom of the Opera: Special Edition","Hostage","Igby Goes Down","Mississippi Burning","Rabbit-Proof Fence","Kill Bill: Vol. 2","The Matrix: Revolutions","Princess Mononoke","Frida","Rush Hour 2","Monty Python's The Meaning of Life: Special Edition","Monsoon Wedding","The Hitchhiker's Guide to the Galaxy","First Knight","American Beauty","Speed","Robin Hood: Prince of Thieves","Saving Grace","The Hand that Rocks the Cradle","Major League","The Perfect Storm","Roger & Me","Domestic Disturbance","Mean Girls","Clerks","Boyz N the Hood","Jaws","Back to the Future Part III","Seven Samurai","Ray","Dangerous Minds","Fallen","I Spy","A Streetcar Named Desire","The Mummy","The Simpsons: Season 1","Uptown Girls","Superman: The Movie","Coach Carter","Training Day","Secondhand Lions","Freddy vs. Jason","Fried Green Tomatoes","The Wedding Planner","The Sandlot","A Beautiful Mind","National Lampoon's Vacation","Man on Fire","Better Off Dead","Dr. Dolittle 2","Look Who's Talking Too","Thirteen","S.W.A.T.","Presumed Innocent","The Professional","The Piano","Hook","The Recruit","Midnight Cowboy","Three Musketeers","Bend It Like Beckham","National Lampoon's Van Wilder","Sleepless in Seattle","American Wedding","Poltergeist","Joy Ride","Life as a House","The American President","Aliens: Collector's Edition","Casino: 10th Anniversary Edition","The In-Laws","Nine to Five","Grumpy Old Men","Absolute Power","Bottle Rocket","Ever After: A Cinderella Story","The Life Aquatic with Steve Zissou","Beverly Hills Cop","Sixteen Candles","Trainspotting","Lethal Weapon","Die Hard 2: Die Harder","U.S. Marshals","Rosemary's Baby","Alex and Emma","Beverly Hills Cop III","Evolution","Eternal Sunshine of the Spotless Mind","Friends: Season 2","Regarding Henry","Cheech & Chong's Up in Smoke","Star Trek: The Motion Picture","Pirates of the Caribbean: The Curse of the Black Pearl","The Alamo","50 First Dates","Il Postino","Hollow Man","Four Weddings and a Funeral","Under Siege","The Talented Mr. Ripley","Talk to Her","The Magdalene Sisters","Liar Liar","Identity","Being John Malkovich","Rudy","The Color of Money","What Women Want","Free Willy","Brother Bear (Theatrical Widescreen Version)","The Simpsons: Season 3","Lock Stock and Two Smoking Barrels","Bad Boys","The Hurricane","Collateral Damage","On Golden Pond","Bram Stoker's Dracula","Aladdin: Platinum Edition","Super Size Me","The Omen","Singin' in the Rain","To Catch a Thief","The Bourne Supremacy","The Cutting Edge","Along Came Polly","Scream","Alien: Collector's Edition","Like Water for Chocolate","Lord of the Rings: The Fellowship of the Ring","A Cinderella Story","Planes Trains and Automobiles","This Is Spinal Tap","Wayne's World","Exit Wounds","America's Sweethearts","The Rocky Horror Picture Show","Y Tu Mama Tambien","Freaky Friday","Look Who's Talking","Don't Say a Word","Ghost Ship","When Harry Met Sally","Solaris","The Emperor's New Groove","The Missing","From Hell","The Pianist","Dr. Seuss' The Cat in the Hat","Braveheart","Serendipity","Beauty Shop","Falling Down","The Silence of the Lambs","Message in a Bottle","Elf","Sleeping Beauty: Special Edition","Finding Neverland","Heathers","The Best of Friends: Season 1","Moonstruck","The Ladykillers","The Rundown","The Final Cut","Cocoon","Escape from Alcatraz","The Best of Friends: Season 2","The Lion King: Special Edition","Little Nicky","Three Men and a Little Lady","Ghost","Dante's Peak","Blade: Trinity","The English Patient","Napoleon Dynamite","Scary Movie 2","Dirty Rotten Scoundrels","Around the World in 80 Days","The Addams Family","The Princess Diaries (Fullscreen)","Daredevil","Swimming Pool","Half Baked","Sideways","The Godfather Part II","The Maltese Falcon","About a Boy","The Village","Reindeer Games","The Ice Storm","The Parent Trap","The Family Man","Whale Rider","28 Days Later","Sister Act 2: Back in the Habit","Men in Black II","Forever Young","Spirited Away","10 Things I Hate About You","Spy Kids","Time Bandits","City by the Sea","Beaches","History of the World: Part 1","2 Fast 2 Furious","The Wizard of Oz: Collector's Edition","Lethal Weapon 3","Man on the Moon","Death Becomes Her","The Last Samurai","25th Hour","Bad Boys II","Who Framed Roger Rabbit?: Special Edition","War Games","Goldfinger","Saw","Commando","So I Married an Axe Murderer","Elizabeth","About Schmidt","Flatliners","The Sting","Stargate","Fear and Loathing in Las Vegas","The Sum of All Fears","Bruce Almighty","Batman Begins","The Motorcycle Diaries","Confessions of a Teenage Drama Queen","The People vs. Larry Flynt","Surviving Christmas","Amores Perros","The Others","Garden State","The Matrix: Reloaded","End of Days","Shrek 2","Finding Nemo (Widescreen)","Friday Night Lights","Signs","Planet of the Apes","A Mighty Wind","Innerspace","American Psycho","Patch Adams","The King and I","Shanghai Noon","Scooby-Doo 2: Monsters Unleashed","Barbershop","Jurassic Park III","The Full Monty","Footloose: Special Collector's Edition","Rat Race","Sleepy Hollow","The Passion of the Christ","An Officer and a Gentleman","The Sixth Sense","In Good Company","While You Were Sleeping","The Scorpion King","Bowling for Columbine","Road to Perdition","Network","Porky's","Dawn of the Dead","A Man Apart","Army of Darkness","The Mask: Special Edition","A Nightmare on Elm Street","The Italian Job","Love Actually","Ordinary People","Wonder Boys"];
+          
+          // for (let i = 0; i < sampleData.length; i++) {
+          //   samples[sampleData[i]] = sampleLabels[i];
+          // }
+          draw();
+        });
+      // N_SAMPLES = parseInt($('#param-nsamples').val(), 10);
+    }
+
+    function readTextFile( file ) {
+      return new Promise( function ( fulfill, reject ) {
+
+        var allText;
+        var rawFile = new XMLHttpRequest();
+        rawFile.open( "GET", file );
+        rawFile.onreadystatechange = function () {
+          if ( rawFile.readyState === 4 ) {
+            if ( rawFile.status === 200 || rawFile.status == 0 ) {
+              fulfill( rawFile.responseText )
+            }
+          }
+        }
+        rawFile.send( null );
+      } );
+    }
+    function draw () {
+       function _draw(sample) {
+        worker.postMessage({
+          type: 'INPUT_DATA',
+          data: sampleData
+        });
+        $('#embedding-space').empty();
+        var embeddingSpace = document.getElementById('embedding-space');
+        for (var n = 0; n < 300; n++) {
+          var parent = document.createElement('div');
+          parent.setAttribute('class', 'parent-sample');
+          parent.setAttribute('id', `parent-sample-${n}`);
+          parent.style.position = 'absolute';
+          parent.style.transform = `translateX(${Math.random() * (embeddingSpace.clientWidth - 20) - 5}px) translateY(${Math.random() * (embeddingSpace.clientHeight - 20) - 5}px)`;
+          
+
+          var c = document.createElement('div');
+          c.setAttribute('class', 'sample');
+          c.setAttribute('class', 'sample1');
+          c.setAttribute('id', `sample-${n}`);
+          // c.setAttribute('num', `${sampleData[n]}`);
+          c.style.width="8px";
+          c.style.height="8px";
+          c.style.backgroundColor="white";
+          c.style.borderRadius="50%";
+          c.style.left="0px";
+          c.style.top="0px";
+
+          const name = document.createElement('div');
+          name.setAttribute('class', 'sample text-sample');
+          name.setAttribute('id', `sample-text-${n}`);
+          name.textContent = sampleLabels[n];
+          name.style.color="white";
+          name.style.minWidth="8px";
+          name.style.height="8px";
+          name.style.fontSize="11px";
+          name.style.left="4px";
+          name.style.top="6px";
+
+          // name.style.transform = `translateX(${Math.random() * embeddingSpace.clientWidth +4}px) translateY(${Math.random() * embeddingSpace.clientHeight - 25}px)`;
+          // c.style.transform = `translateX(${Math.random() * embeddingSpace.clientWidth - 5}px) translateY(${Math.random() * embeddingSpace.clientHeight - 5}px)`;
+          
+          embeddingSpace.appendChild(parent);
+          parent.appendChild(c);
+          parent.appendChild(name);
+
+          parent.addEventListener('click', (ele) => {
+            if (document.getElementById('selected-movie') !== null) {
+              document.getElementById('selected-movie').remove();
+            }
+            
+
+            const split_id = ele.target.id.split("-");
+            const id = split_id[split_id.length -1];
+            const selectedMovie = document.createElement('div');
+            selectedMovie.setAttribute('class', 'selected-movie');
+            selectedMovie.setAttribute('id', 'selected-movie');
+
+            // const my = document.getElementById(`parent-sample-${id}`);
+            // console.log(my.getAttribute('num'));
+
+            // let max = 0;
+            // for (let i = 0; i < sampleData[id * 1].length; i++) {
+            //   if (max < sampleData[id * 1][i] * 1) {
+            //     max = sampleData[id * 1][i] * 1;
+            //   }
+            // }
+
+            // for (let i = 0; i < sampleData[id * 1].length; i++) {
+            //   document.getElementById(`sample-${i}`).style.opacity = (max - sampleData[id * 1]) /max;
+            // }
+
+
+            selectedMovie.innerHTML = document.getElementById(`sample-text-${id}`).textContent;
+            document.getElementById('s-c').appendChild(selectedMovie);
+            let recommandParent = document.getElementById('recommand-movie');
+            recommandParent.remove();
+
+            recommandParent = document.createElement('div');
+            recommandParent.setAttribute('class', 'recommand-movie');
+            recommandParent.setAttribute('id', 'recommand-movie');
+            document.getElementById('selected-content').appendChild(recommandParent);
+
+            const indices = new Array(sampleData[0].length);
+            for(let i = 0; i < indices.length; i++) {
+              indices[i] = i;
+            }
+            
+            const arr = indices.sort((a, b) => sampleData[id * 1][a] - sampleData[id * 1][b]).slice(1, 4);
+            arr.forEach((num) => {
+              const name = sampleLabels[num * 1];
+              const rec_movie = document.createElement('div');
+              rec_movie.setAttribute('class', 'movie');
+              rec_movie.innerHTML = name;
+              recommandParent.appendChild(rec_movie);
+            });
+
+
+          }) 
+        }
+      }
+      _draw();
+    }
+    function run () {
+      // if(document.getElementById('selected-movie') !== null)
+      //   document.getElementById('selected-movie').remove();
+      // const movies = document.getElementsByClassName('recommand-movie');
+      // const count = movies.lnegth;
+      // for (let i = 0; i < count; i++) {
+      //   movies[i].remove();
+      // }
+      worker.postMessage({
+        type: 'RUN',
+        data: {
+          perplexity: parseInt($('#param-perplexity').val(), 10),
+          earlyExaggeration: parseFloat($('#param-earlyexag').val()),
+          learningRate: parseInt($('#param-learningrate').val(), 10),
+          nIter: parseInt($('#param-maxiter').val(), 10),
+          metric: 'euclidean'
+        }
+      });
+    }
+    function drawUpdate (embedding) {
+      var embeddingSpace = document.getElementById('embedding-space');
+      var embeddingSpaceWidth = embeddingSpace.clientWidth;
+      var embeddingSpaceHeight = embeddingSpace.clientHeight;
+      for (var n = 0; n < 300; n++) {
+        var c = document.getElementById(`parent-sample-${n}`);
+        c.style.transform = `translateX(${(embedding[n][0] + 1) * (embeddingSpaceWidth - 20) / 2 - 20}px) translateY(${(embedding[n][1] + 1) * (embeddingSpaceHeight - 20) / 2 - 5}px)`;
+      }
+    }
+    // form controls
+    $('#param-nsamples').change(function () {
+      const t = document.getElementsByClassName('text-sample');
+      const c = document.getElementsByClassName('sample1');
+      const selected = $('#param-nsamples').val();
+      if (selected === '100' ) {
+        for (let i = 0; i < t.length; i++) {
+          t[i].style.display="none";
+        }
+        for (let i = 0; i < c.length; i++) {
+          c[i].style.display="block";
+        }
+      } else if (selected === '200') {
+        for (let i = 0; i < t.length; i++) {
+          t[i].style.display="block";
+        }
+        for (let i = 0; i < c.length; i++) {
+          c[i].style.display="none";
+        }
+      } else {
+        for (let i = 0; i < t.length; i++) {
+          t[i].style.display="block";
+        }
+        for (let i = 0; i < c.length; i++) {
+          c[i].style.display="block";
+        }
+      }
+    });
+    //computed
+    $('#param-perplexity').bind('input', function () { $('#param-perplexity-value').text($('#param-perplexity').val()); });
+    $('#param-earlyexag').bind('input', function () { $('#param-earlyexag-value').text($('#param-earlyexag').val()); });
+    $('#param-learningrate').bind('input', function () { $('#param-learningrate-value').text($('#param-learningrate').val()); });
+    $('#param-maxiter').bind('input', function () { $('#param-maxiter-value').text($('#param-maxiter').val()); });
+  </script>
+</body>
+</html>
